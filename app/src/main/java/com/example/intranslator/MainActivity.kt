@@ -89,7 +89,6 @@ private val QUIZ_HISTORY = stringPreferencesKey("quiz_history")
 private val QUIZ_MODE = stringPreferencesKey("quiz_mode")
 private val QUIZ_LANGUAGE_PAIR = stringPreferencesKey("quiz_language_pair")
 private val HISTORY_LANGUAGE_PAIR = stringPreferencesKey("history_language_pair")
-private val AUTO_DETECT_LANGUAGE = stringPreferencesKey("auto_detect_language")
 
 @OptIn(ExperimentalMaterial3Api::class)
 class MainActivity : ComponentActivity() {
@@ -106,7 +105,6 @@ class MainActivity : ComponentActivity() {
     private var quizLanguagePair by mutableStateOf<Pair<String, String>?>(null)
     private var historyLanguagePair by mutableStateOf<Pair<String, String>?>(null)
     private lateinit var textToSpeech: TextToSpeech
-    private var autoDetectLanguage by mutableStateOf(false)
     
     private val availableModels = listOf(
         "gpt-3.5-turbo",
@@ -149,23 +147,7 @@ class MainActivity : ComponentActivity() {
         if (result.resultCode == Activity.RESULT_OK) {
             val data = result.data
             val results = data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
-            // Get detected language from recognition results
-            val detectedLanguage = data?.getStringExtra(RecognizerIntent.EXTRA_LANGUAGE)
-            
             if (!results.isNullOrEmpty()) {
-                if (autoDetectLanguage && detectedLanguage != null) {
-                    // Find the matching language in our available languages
-                    val detectedName = availableLanguages.entries.find { it.value.startsWith(detectedLanguage) }?.key
-                    
-                    if (detectedName != null) {
-                        // Update the selected language
-                        runBlocking {
-                            selectedLanguageState = detectedName
-                            saveSelectedLanguage(detectedName)
-                        }
-                    }
-                }
-                
                 updateRecognizedText(results[0])
                 if (targetLanguageState.isNotEmpty() && apiKeyState.isNotEmpty()) {
                     translateText(results[0])
@@ -269,27 +251,20 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun startSpeechRecognition() {
+        val languageCode = availableLanguages[selectedLanguageState] ?: "en-US"
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            if (autoDetectLanguage) {
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                putExtra(RecognizerIntent.EXTRA_ONLY_RETURN_LANGUAGE_PREFERENCE, false)
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "")
-            } else {
-                val languageCode = availableLanguages[selectedLanguageState] ?: "en-US"
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE, languageCode)
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, languageCode)
-                putExtra(RecognizerIntent.EXTRA_ONLY_RETURN_LANGUAGE_PREFERENCE, true)
-            }
-            putExtra(RecognizerIntent.EXTRA_PROMPT, if (autoDetectLanguage) "Speak now..." else "Speak now in ${selectedLanguageState}...")
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, languageCode)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, languageCode)
+            putExtra(RecognizerIntent.EXTRA_ONLY_RETURN_LANGUAGE_PREFERENCE, true)
+            putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak now in ${selectedLanguageState}...")
         }
         try {
             speechRecognizerLauncher.launch(intent)
         } catch (e: Exception) {
             Toast.makeText(
                 this,
-                if (autoDetectLanguage) "Speech recognition not available"
-                else "Speech recognition not available for ${selectedLanguageState}",
+                "Speech recognition not available for ${selectedLanguageState}",
                 Toast.LENGTH_SHORT
             ).show()
         }
@@ -462,12 +437,6 @@ class MainActivity : ComponentActivity() {
                 val parts = historyPairStr.split("|")
                 if (parts.size == 2) Pair(parts[0], parts[1]) else null
             } else null
-
-            autoDetectLanguage = dataStore.data
-                .map { preferences ->
-                    preferences[AUTO_DETECT_LANGUAGE]?.toBoolean() ?: false
-                }
-                .first()
         }
     }
 
@@ -763,11 +732,6 @@ class MainActivity : ComponentActivity() {
                                     readAloudEnabled = enabled
                                     runBlocking { saveReadAloudPreference(enabled) }
                                 },
-                                autoDetectEnabled = autoDetectLanguage,
-                                onAutoDetectChanged = { enabled ->
-                                    autoDetectLanguage = enabled
-                                    runBlocking { saveAutoDetectLanguage(enabled) }
-                                },
                                 onLanguageSelected = { language ->
                                     selectedLanguageState = language
                                     runBlocking { saveSelectedLanguage(language) }
@@ -789,13 +753,14 @@ class MainActivity : ComponentActivity() {
                                         deleteDictionaryEntry(entry)
                                     }
                                 },
-                                modifier = Modifier.padding(innerPadding)
-                            )
+                        modifier = Modifier.padding(innerPadding)
+                    )
                         }
                 }
             }
         }
     }
+}
 
     override fun onDestroy() {
         super.onDestroy()
@@ -811,12 +776,6 @@ class MainActivity : ComponentActivity() {
     private suspend fun saveReadAloudPreference(enabled: Boolean) {
         dataStore.edit { preferences ->
             preferences[READ_ALOUD_ENABLED] = enabled.toString()
-        }
-    }
-
-    private suspend fun saveAutoDetectLanguage(enabled: Boolean) {
-        dataStore.edit { preferences ->
-            preferences[AUTO_DETECT_LANGUAGE] = enabled.toString()
         }
     }
 
@@ -969,7 +928,7 @@ fun DictionaryScreen(
                         .weight(1f),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
+    Text(
                         text = if (entries.isEmpty())
                             "No translations yet.\nStart translating to build your history!"
                         else
@@ -1108,8 +1067,6 @@ fun SpeechRecognitionScreen(
     isTranslating: Boolean,
     readAloudEnabled: Boolean,
     onReadAloudChanged: (Boolean) -> Unit,
-    autoDetectEnabled: Boolean,
-    onAutoDetectChanged: (Boolean) -> Unit,
     onLanguageSelected: (String) -> Unit,
     onTargetLanguageSelected: (String) -> Unit,
     onStartRecognition: () -> Unit,
@@ -1194,54 +1151,34 @@ fun SpeechRecognitionScreen(
                             .fillMaxWidth(),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        // Auto-detect language checkbox
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.Start,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Checkbox(
-                                checked = autoDetectEnabled,
-                                onCheckedChange = onAutoDetectChanged
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Auto-detect input language",
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                        }
-
-                        // Source Language Selector (disabled when auto-detect is enabled)
+                        // Source Language Selector
                         ExposedDropdownMenuBox(
                             expanded = sourceExpanded,
-                            onExpandedChange = { if (!autoDetectEnabled) sourceExpanded = it }
+                            onExpandedChange = { sourceExpanded = it }
                         ) {
                             OutlinedTextField(
                                 value = selectedLanguage,
                                 onValueChange = {},
                                 readOnly = true,
-                                enabled = !autoDetectEnabled,
-                                label = { Text(if (autoDetectEnabled) "Language (Auto-detect)" else "From") },
-                                trailingIcon = { if (!autoDetectEnabled) ExposedDropdownMenuDefaults.TrailingIcon(expanded = sourceExpanded) },
+                                label = { Text("From") },
+                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = sourceExpanded) },
                                 modifier = Modifier
                                     .menuAnchor()
                                     .fillMaxWidth()
                             )
 
-                            if (!autoDetectEnabled) {
-                                ExposedDropdownMenu(
-                                    expanded = sourceExpanded,
-                                    onDismissRequest = { sourceExpanded = false }
-                                ) {
-                                    availableLanguages.forEach { language ->
-                                        DropdownMenuItem(
-                                            text = { Text(language) },
-                                            onClick = {
-                                                onLanguageSelected(language)
-                                                sourceExpanded = false
-                                            }
-                                        )
-                                    }
+                            ExposedDropdownMenu(
+                                expanded = sourceExpanded,
+                                onDismissRequest = { sourceExpanded = false }
+                            ) {
+                                availableLanguages.forEach { language ->
+                                    DropdownMenuItem(
+                                        text = { Text(language) },
+                                        onClick = {
+                                            onLanguageSelected(language)
+                                            sourceExpanded = false
+                                        }
+                                    )
                                 }
                             }
                         }
