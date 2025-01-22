@@ -110,7 +110,17 @@ class MainActivity : ComponentActivity() {
     private val availableModels = listOf(
         "gpt-3.5-turbo",
         "gpt-4",
-        "gpt-4-turbo-preview"
+        "gpt-4-turbo-preview",
+        "gpt-4o",
+        "gpt-4o-mini"
+    )
+
+    private val modelPricing = mapOf(
+        "gpt-3.5-turbo" to Pair(0.000002, 0.000002),
+        "gpt-4" to Pair(0.00003, 0.00006),
+        "gpt-4-turbo-preview" to Pair(0.000015, 0.00003),
+        "gpt-4o" to Pair(0.00004, 0.00008),
+        "gpt-4o-mini" to Pair(0.00002, 0.00004)
     )
 
     private val availableLanguages = mapOf(
@@ -542,10 +552,15 @@ class MainActivity : ComponentActivity() {
             )
             
             // Update token usage
-            val usage = completion.usage?.totalTokens ?: 0
+            val inputTokens = completion.usage?.promptTokens ?: 0
+            val outputTokens = completion.usage?.completionTokens ?: 0
+            val (inputPrice, outputPrice) = modelPricing[modelType] ?: Pair(0.0, 0.0)
+            val cost = inputTokens * inputPrice + outputTokens * outputPrice
             withContext(Dispatchers.Main) {
-                tokenUsage += usage
+                tokenUsage += inputTokens + outputTokens
                 saveTokenUsage(tokenUsage)
+                // Update cost display
+                updateCostDisplay(cost)
             }
             
             completion.choices.first().message.content?.trim().equals("true", ignoreCase = true)
@@ -569,12 +584,31 @@ class MainActivity : ComponentActivity() {
                         ChatMessage(
                             role = ChatRole.System,
                             content = """
-                                You are a helpful AI assistant analyzing translations. FOLLOW STRICTLY THE FOLLOWING FORMAT:
-                                1. All your response must be in "$toLanguage".
-                                2. If the translation is only one noun: (a) provide its gender (when applicable) and (b) provide its plural form (when applicable). Use the format (m/f/n/pl). Ignore these two clauses for translations from English.
-                                3. If possible, list 2-3 alternative meanings or translations. 
-                                4. When translating individual words or short phrases, provide one brief example of usage in "$fromLanguage" and its translation to "$toLanguage".
-                                5. Don't insert any other text or phrases in your response.
+                                You are a helpful AI assistant specializing in analyzing translations. Please follow these instructions exactly:
+
+                                1. Write your entire response in "$toLanguage" only.
+                                2. Use the following template for your response (include only the sections that apply):
+                                
+                                [Gender/Plural]
+                                Provide gender (m/f/n) and the plural form if:
+                                - The translation is a single noun,
+                                - The source language is not English.
+                                
+                                [Alternative Meanings]
+                                Provide 2–3 alternative meanings or translations, if possible.
+                                
+                                [Example Usage]
+                                For individual words or short phrases, include:
+                                - A brief usage example in "$fromLanguage",
+                                - Its translation in "$toLanguage".
+                                
+                                [Correction]
+                                If there are grammatical errors in the original or the translated text, provide the corrected version (marked with "*").
+                                
+                                [Conjugations]
+                                If the translation is a single verb, provide relevant tense conjugations.
+
+                                3. Do not include any additional text or commentary beyond these template sections.
                             """.trimIndent()
                         ),
                         ChatMessage(
@@ -799,6 +833,12 @@ class MainActivity : ComponentActivity() {
             else -> dictionaryEntries
         }
         return filteredEntries
+    }
+
+    private fun updateCostDisplay(cost: Double) {
+        // Placeholder for updating the cost display in the UI
+        // You can customize this to update a TextView or any other UI component
+        println("Current cost: $$cost")
     }
 
     companion object {
@@ -1173,7 +1213,7 @@ fun SpeechRecognitionScreen(
                                 expanded = sourceExpanded,
                                 onDismissRequest = { sourceExpanded = false }
                             ) {
-                                availableLanguages.forEach { language ->
+                                availableLanguages.filter { it != targetLanguage }.forEach { language ->
                                     DropdownMenuItem(
                                         text = { Text(language) },
                                         onClick = {
@@ -1223,7 +1263,7 @@ fun SpeechRecognitionScreen(
                                 expanded = targetExpanded,
                                 onDismissRequest = { targetExpanded = false }
                             ) {
-                                availableLanguages.forEach { language ->
+                                availableLanguages.filter { it != selectedLanguage }.forEach { language ->
                                     DropdownMenuItem(
                                         text = { Text(language) },
                                         onClick = {
@@ -1234,23 +1274,23 @@ fun SpeechRecognitionScreen(
                                 }
                             }
                         }
+                    }
 
-                        // Read Aloud Checkbox
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.Start,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Checkbox(
-                                checked = readAloudEnabled,
-                                onCheckedChange = onReadAloudChanged
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Read translations aloud",
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                        }
+                    // Read Aloud Checkbox
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Start,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(
+                            checked = readAloudEnabled,
+                            onCheckedChange = onReadAloudChanged
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Read translations aloud",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
                     }
                 }
             }
