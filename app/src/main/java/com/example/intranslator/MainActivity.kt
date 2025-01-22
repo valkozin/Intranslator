@@ -72,6 +72,7 @@ data class QuizResult(
     val score: Int,
     val totalAttempts: Int,
     val timePeriod: String,
+    val languagePair: Pair<String, String>?,
     val timestamp: Long = System.currentTimeMillis()
 )
 
@@ -689,7 +690,8 @@ class MainActivity : ComponentActivity() {
                                         QuizResult(
                                             score = score,
                                             totalAttempts = totalAttempts,
-                                            timePeriod = quizTimePeriod
+                                            timePeriod = quizTimePeriod,
+                                            languagePair = quizLanguagePair
                                         )
                                     )
                                 }
@@ -1677,6 +1679,7 @@ fun QuizScreen(
     var questionText by remember { mutableStateOf("") }
     var isChecking by remember { mutableStateOf(false) }
     var languagePairExpanded by remember { mutableStateOf(false) }
+    var usedQuestions by remember { mutableStateOf(mutableSetOf<String>()) }
     val keyboardController = LocalSoftwareKeyboardController.current
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -1701,7 +1704,26 @@ fun QuizScreen(
                 pair == selectedLanguagePair
             }
         }
-        currentEntry = if (entries.isNotEmpty()) {
+
+        // Reset used questions if we've used all available questions
+        if (usedQuestions.size >= entries.size) {
+            usedQuestions.clear()
+        }
+
+        // Filter out recently used questions
+        val availableEntries = entries.filter { entry ->
+            val key = "${entry.originalText}|${entry.translatedText}|${entry.fromLanguage}|${entry.toLanguage}"
+            !usedQuestions.contains(key)
+        }
+
+        currentEntry = if (availableEntries.isNotEmpty()) {
+            val selected = availableEntries.random()
+            // Add to used questions
+            usedQuestions.add("${selected.originalText}|${selected.translatedText}|${selected.fromLanguage}|${selected.toLanguage}")
+            selected
+        } else if (entries.isNotEmpty()) {
+            // If no unused questions available but we have entries, reset and try again
+            usedQuestions.clear()
             entries.random()
         } else {
             null
@@ -1718,6 +1740,11 @@ fun QuizScreen(
         
         userAnswer = ""
         showResult = false
+    }
+
+    // Reset used questions when period or language pair changes
+    LaunchedEffect(selectedPeriod, selectedLanguagePair) {
+        usedQuestions.clear()
     }
 
     fun checkAnswer() {
@@ -1903,36 +1930,36 @@ fun QuizScreen(
                                 }
                             }
                         }
+                    }
 
-                        // Time period selector
-                        ExposedDropdownMenuBox(
+                    // Time period selector
+                    ExposedDropdownMenuBox(
+                        expanded = periodExpanded,
+                        onExpandedChange = { periodExpanded = it }
+                    ) {
+                        OutlinedTextField(
+                            value = selectedPeriod,
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Time Period") },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = periodExpanded) },
+                            modifier = Modifier
+                                .menuAnchor()
+                                .fillMaxWidth()
+                        )
+
+                        ExposedDropdownMenu(
                             expanded = periodExpanded,
-                            onExpandedChange = { periodExpanded = it }
+                            onDismissRequest = { periodExpanded = false }
                         ) {
-                            OutlinedTextField(
-                                value = selectedPeriod,
-                                onValueChange = {},
-                                readOnly = true,
-                                label = { Text("Time Period") },
-                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = periodExpanded) },
-                                modifier = Modifier
-                                    .menuAnchor()
-                                    .fillMaxWidth()
-                            )
-
-                            ExposedDropdownMenu(
-                                expanded = periodExpanded,
-                                onDismissRequest = { periodExpanded = false }
-                            ) {
-                                timePeriods.forEach { period ->
-                                    DropdownMenuItem(
-                                        text = { Text(period) },
-                                        onClick = {
-                                            onPeriodSelected(period)
-                                            periodExpanded = false
-                                        }
-                                    )
-                                }
+                            timePeriods.forEach { period ->
+                                DropdownMenuItem(
+                                    text = { Text(period) },
+                                    onClick = {
+                                        onPeriodSelected(period)
+                                        periodExpanded = false
+                                    }
+                                )
                             }
                         }
                     }
@@ -2097,10 +2124,19 @@ fun QuizScreen(
                                         modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.SpaceBetween
                                     ) {
-                                        Text(
-                                            text = "${result.score}/${result.totalAttempts} (${result.timePeriod})",
-                                            style = MaterialTheme.typography.bodyMedium
-                                        )
+                                        Column {
+                                            Text(
+                                                text = "${result.score}/${result.totalAttempts} (${result.timePeriod})",
+                                                style = MaterialTheme.typography.bodyMedium
+                                            )
+                                            if (result.languagePair != null) {
+                                                Text(
+                                                    text = "${result.languagePair.first} ↔ ${result.languagePair.second}",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                        }
                                         Text(
                                             text = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT)
                                                 .format(Date(result.timestamp)),
