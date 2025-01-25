@@ -124,7 +124,7 @@ class MainActivity : ComponentActivity() {
     )
 
     private val availableLanguages = mapOf(
-        "English" to "en-US",
+        "English (US)" to "en-US",
         "Spanish" to "es-ES",
         "French" to "fr-FR",
         "German" to "de-DE",
@@ -1970,36 +1970,36 @@ fun QuizScreen(
                                 }
                             }
                         }
-                    }
 
-                    // Time period selector
-                    ExposedDropdownMenuBox(
-                        expanded = periodExpanded,
-                        onExpandedChange = { periodExpanded = it }
-                    ) {
-                        OutlinedTextField(
-                            value = selectedPeriod,
-                            onValueChange = {},
-                            readOnly = true,
-                            label = { Text("Time Period") },
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = periodExpanded) },
-                            modifier = Modifier
-                                .menuAnchor()
-                                .fillMaxWidth()
-                        )
-
-                        ExposedDropdownMenu(
+                        // Time period selector (moved inside the Column)
+                        ExposedDropdownMenuBox(
                             expanded = periodExpanded,
-                            onDismissRequest = { periodExpanded = false }
+                            onExpandedChange = { periodExpanded = it }
                         ) {
-                            timePeriods.forEach { period ->
-                                DropdownMenuItem(
-                                    text = { Text(period) },
-                                    onClick = {
-                                        onPeriodSelected(period)
-                                        periodExpanded = false
-                                    }
-                                )
+                            OutlinedTextField(
+                                value = selectedPeriod,
+                                onValueChange = {},
+                                readOnly = true,
+                                label = { Text("Time Period") },
+                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = periodExpanded) },
+                                modifier = Modifier
+                                    .menuAnchor()
+                                    .fillMaxWidth()
+                            )
+
+                            ExposedDropdownMenu(
+                                expanded = periodExpanded,
+                                onDismissRequest = { periodExpanded = false }
+                            ) {
+                                timePeriods.forEach { period ->
+                                    DropdownMenuItem(
+                                        text = { Text(period) },
+                                        onClick = {
+                                            onPeriodSelected(period)
+                                            periodExpanded = false
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
