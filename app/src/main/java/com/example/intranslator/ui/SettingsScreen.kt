@@ -26,7 +26,9 @@ fun SettingsScreen(
     onApiKeyChanged: (String) -> Unit,
     onModelTypeChanged: (String) -> Unit,
     onEnabledLanguagesChanged: (Set<String>) -> Unit,
-    onBackClick: () -> Unit
+    onBackClick: () -> Unit,
+    onExportDictionary: () -> Unit,
+    onImportDictionary: () -> Unit
 ) {
     var showApiKeyDialog by remember { mutableStateOf(false) }
     var expanded by remember { mutableStateOf(false) }
@@ -211,6 +213,13 @@ fun SettingsScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+            }
+
+            Button(onClick = { onExportDictionary() }) {
+                Text("Export Dictionary")
+            }
+            Button(onClick = { onImportDictionary() }) {
+                Text("Import Dictionary")
             }
         }
     }

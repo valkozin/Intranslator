@@ -28,6 +28,9 @@ import com.example.intranslator.ui.SpeechRecognitionScreen
 import com.example.intranslator.ui.theme.IntranslatorTheme
 import com.example.intranslator.utils.Constants
 import kotlinx.coroutines.launch
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+import java.io.File
 import java.util.*
 
 class MainActivity : ComponentActivity() {
@@ -321,7 +324,9 @@ class MainActivity : ComponentActivity() {
                                 enabledLanguages = languages
                                 lifecycleScope.launch { preferencesManager.saveEnabledLanguages(languages) }
                             },
-                            onBackClick = { showSettings = false }
+                            onBackClick = { showSettings = false },
+                            onExportDictionary = { exportDictionary() },
+                            onImportDictionary = { importDictionary() }
                         )
                     }
                     showDictionary -> {
@@ -465,5 +470,52 @@ class MainActivity : ComponentActivity() {
     override fun onDestroy() {
         super.onDestroy()
         textToSpeech.shutdown()
+    }
+
+    private fun exportDictionary() {
+        val json = Json.encodeToString(dictionaryEntries)
+        val fileName = "dictionary_export.json"
+        val file = File(getExternalFilesDir(null), fileName)
+
+        lifecycleScope.launch {
+            try {
+                file.writeText(json)
+                Toast.makeText(this@MainActivity, "Dictionary exported to ${file.absolutePath}", Toast.LENGTH_LONG).show()
+            } catch (e: Exception) {
+                Toast.makeText(this@MainActivity, "Export failed: ${e.message}", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    private fun importDictionary() {
+        val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
+            type = "application/json"
+            addCategory(Intent.CATEGORY_OPENABLE)
+        }
+        startActivityForResult(intent, REQUEST_CODE_IMPORT)
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQUEST_CODE_IMPORT && resultCode == Activity.RESULT_OK) {
+            data?.data?.let { uri ->
+                lifecycleScope.launch {
+                    try {
+                        val inputStream = contentResolver.openInputStream(uri)
+                        val json = inputStream?.bufferedReader().use { it?.readText() }
+                        val importedEntries: List<DictionaryEntry> = Json.decodeFromString(json ?: "[]")
+                        dictionaryEntries = importedEntries
+                        preferencesManager.saveDictionaryEntries(dictionaryEntries)
+                        Toast.makeText(this@MainActivity, "Dictionary imported successfully", Toast.LENGTH_LONG).show()
+                    } catch (e: Exception) {
+                        Toast.makeText(this@MainActivity, "Import failed: ${e.message}", Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+        }
+    }
+
+    private companion object {
+        const val REQUEST_CODE_IMPORT = 1001
     }
 }
