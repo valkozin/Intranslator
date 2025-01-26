@@ -11,6 +11,7 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.addCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.*
 import androidx.core.content.ContextCompat
@@ -53,6 +54,8 @@ class MainActivity : ComponentActivity() {
     private var targetLanguageState by mutableStateOf("")
     private var apiKeyState by mutableStateOf("")
     private var isTranslating by mutableStateOf(false)
+
+    private var enabledLanguages by mutableStateOf<Set<String>>(setOf("English (US)"))
 
     private val speechRecognizerLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -251,6 +254,16 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         preferencesManager = PreferencesManager(dataStore)
 
+        // Add back button handling
+        onBackPressedDispatcher.addCallback(this) {
+            when {
+                showSettings -> showSettings = false
+                showDictionary -> showDictionary = false
+                showQuiz -> showQuiz = false
+                else -> finish()
+            }
+        }
+
         lifecycleScope.launch {
             // Load preferences
             val prefs = preferencesManager.loadPreferences()
@@ -262,6 +275,7 @@ class MainActivity : ComponentActivity() {
             readAloudEnabled = prefs.readAloudEnabled
             quizTimePeriod = prefs.quizTimePeriod
             quizMode = prefs.quizMode
+            enabledLanguages = prefs.enabledLanguages
             
             // Load dictionary entries and quiz history
             dictionaryEntries = preferencesManager.loadDictionaryEntries()
@@ -291,6 +305,8 @@ class MainActivity : ComponentActivity() {
                             modelType = modelType,
                             availableModels = Constants.AVAILABLE_MODELS,
                             tokenUsage = tokenUsage,
+                            enabledLanguages = enabledLanguages,
+                            allLanguages = Constants.AVAILABLE_LANGUAGES.keys.toList(),
                             onApiKeyChanged = { key ->
                                 apiKeyState = key
                                 lifecycleScope.launch { preferencesManager.saveApiKey(key) }
@@ -300,6 +316,10 @@ class MainActivity : ComponentActivity() {
                                 modelType = model
                                 lifecycleScope.launch { preferencesManager.saveModelType(model) }
                                 translationManager = TranslationManager(apiKeyState, modelType)
+                            },
+                            onEnabledLanguagesChanged = { languages ->
+                                enabledLanguages = languages
+                                lifecycleScope.launch { preferencesManager.saveEnabledLanguages(languages) }
                             },
                             onBackClick = { showSettings = false }
                         )
@@ -395,7 +415,7 @@ class MainActivity : ComponentActivity() {
                             translatedText = translatedTextState,
                             selectedLanguage = selectedLanguageState,
                             targetLanguage = targetLanguageState,
-                            availableLanguages = Constants.AVAILABLE_LANGUAGES.keys.toList(),
+                            availableLanguages = enabledLanguages.toList(),
                             isTranslating = isTranslating,
                             readAloudEnabled = readAloudEnabled,
                             onReadAloudChanged = { enabled ->
@@ -414,6 +434,7 @@ class MainActivity : ComponentActivity() {
                             onTranslateText = { translateText(inputTextState) },
                             onShowDictionary = { showDictionary = true },
                             onShowQuiz = { showQuiz = true },
+                            onShowSettings = { showSettings = true },
                             onUpdateRecognizedText = { text -> updateRecognizedText(text) },
                             getAdditionalInfo = { originalText, translatedText, fromLang, toLang ->
                                 translationManager.getAdditionalTranslationInfo(

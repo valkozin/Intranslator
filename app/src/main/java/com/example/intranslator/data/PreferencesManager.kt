@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.example.intranslator.models.DictionaryEntry
 import com.example.intranslator.models.QuizResult
+import com.example.intranslator.utils.Constants
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.encodeToString
@@ -28,17 +29,19 @@ object PreferencesKeys {
     val QUIZ_MODE = stringPreferencesKey("quiz_mode")
     val QUIZ_LANGUAGE_PAIR = stringPreferencesKey("quiz_language_pair")
     val HISTORY_LANGUAGE_PAIR = stringPreferencesKey("history_language_pair")
+    val ENABLED_LANGUAGES = stringPreferencesKey("enabled_languages")
 }
 
 data class PreferencesData(
-    val selectedLanguage: String = "English (US)",
-    val targetLanguage: String = "",
+    val selectedLanguage: String = Constants.AVAILABLE_LANGUAGES.keys.first(),
+    val targetLanguage: String = Constants.AVAILABLE_LANGUAGES.keys.drop(1).first(),
     val apiKey: String = "",
     val modelType: String = "gpt-3.5-turbo",
     val tokenUsage: Int = 0,
     val readAloudEnabled: Boolean = false,
     val quizTimePeriod: String = "All time",
-    val quizMode: String = "Mixed"
+    val quizMode: String = "Mixed",
+    val enabledLanguages: Set<String> = Constants.AVAILABLE_LANGUAGES.keys.toSet()
 )
 
 class PreferencesManager(private val dataStore: DataStore<Preferences>) {
@@ -134,31 +137,52 @@ class PreferencesManager(private val dataStore: DataStore<Preferences>) {
         }
     }
 
+    suspend fun saveEnabledLanguages(languages: Set<String>) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.ENABLED_LANGUAGES] = Json.encodeToString(languages.toList())
+        }
+    }
+
     suspend fun loadPreferences(): PreferencesData {
+        val defaultPrefs = PreferencesData()
         return PreferencesData(
             selectedLanguage = dataStore.data
-                .map { it[PreferencesKeys.SELECTED_LANGUAGE] ?: "English (US)" }
+                .map { it[PreferencesKeys.SELECTED_LANGUAGE] ?: defaultPrefs.selectedLanguage }
                 .first(),
             targetLanguage = dataStore.data
-                .map { it[PreferencesKeys.TARGET_LANGUAGE] ?: "" }
+                .map { it[PreferencesKeys.TARGET_LANGUAGE] ?: defaultPrefs.targetLanguage }
                 .first(),
             apiKey = dataStore.data
-                .map { it[PreferencesKeys.API_KEY] ?: "" }
+                .map { it[PreferencesKeys.API_KEY] ?: defaultPrefs.apiKey }
                 .first(),
             modelType = dataStore.data
-                .map { it[PreferencesKeys.MODEL_TYPE] ?: "gpt-3.5-turbo" }
+                .map { it[PreferencesKeys.MODEL_TYPE] ?: defaultPrefs.modelType }
                 .first(),
             tokenUsage = dataStore.data
-                .map { it[PreferencesKeys.TOKEN_USAGE]?.toIntOrNull() ?: 0 }
+                .map { it[PreferencesKeys.TOKEN_USAGE]?.toIntOrNull() ?: defaultPrefs.tokenUsage }
                 .first(),
             readAloudEnabled = dataStore.data
-                .map { it[PreferencesKeys.READ_ALOUD_ENABLED]?.toBoolean() ?: false }
+                .map { it[PreferencesKeys.READ_ALOUD_ENABLED]?.toBoolean() ?: defaultPrefs.readAloudEnabled }
                 .first(),
             quizTimePeriod = dataStore.data
-                .map { it[PreferencesKeys.QUIZ_TIME_PERIOD] ?: "All time" }
+                .map { it[PreferencesKeys.QUIZ_TIME_PERIOD] ?: defaultPrefs.quizTimePeriod }
                 .first(),
             quizMode = dataStore.data
-                .map { it[PreferencesKeys.QUIZ_MODE] ?: "Mixed" }
+                .map { it[PreferencesKeys.QUIZ_MODE] ?: defaultPrefs.quizMode }
+                .first(),
+            enabledLanguages = dataStore.data
+                .map { 
+                    val json = it[PreferencesKeys.ENABLED_LANGUAGES]
+                    if (json == null) {
+                        defaultPrefs.enabledLanguages
+                    } else {
+                        try {
+                            Json.decodeFromString<List<String>>(json).toSet()
+                        } catch (e: Exception) {
+                            defaultPrefs.enabledLanguages
+                        }
+                    }
+                }
                 .first()
         )
     }

@@ -40,6 +40,7 @@ fun SpeechRecognitionScreen(
     onUpdateRecognizedText: (String) -> Unit,
     getAdditionalInfo: suspend (String, String, String, String) -> String,
     onDeleteEntry: (DictionaryEntry) -> Unit,
+    onShowSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var sourceExpanded by remember { mutableStateOf(false) }
@@ -64,7 +65,16 @@ fun SpeechRecognitionScreen(
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                     titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                )
+                ),
+                actions = {
+                    IconButton(onClick = { onShowSettings() }) {
+                        Icon(
+                            Icons.Default.Settings,
+                            contentDescription = "Settings",
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                }
             )
         }
     ) { padding ->

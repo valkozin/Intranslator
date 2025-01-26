@@ -1,10 +1,16 @@
 package com.example.intranslator.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
@@ -15,8 +21,11 @@ fun SettingsScreen(
     modelType: String,
     availableModels: List<String>,
     tokenUsage: Int,
+    enabledLanguages: Set<String>,
+    allLanguages: List<String>,
     onApiKeyChanged: (String) -> Unit,
     onModelTypeChanged: (String) -> Unit,
+    onEnabledLanguagesChanged: (Set<String>) -> Unit,
     onBackClick: () -> Unit
 ) {
     var showApiKeyDialog by remember { mutableStateOf(false) }
@@ -42,7 +51,8 @@ fun SettingsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(16.dp),
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // API Key Section
@@ -112,6 +122,64 @@ fun SettingsScreen(
                                     }
                                 )
                             }
+                        }
+                    }
+                }
+            }
+
+            // Language Selection
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                ) {
+                    Text(
+                        text = "Available Languages",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Select languages to show in the translator",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    allLanguages.forEach { language ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp)
+                                .clickable { 
+                                    val checked = language !in enabledLanguages
+                                    val newLanguages = if (checked) {
+                                        enabledLanguages + language
+                                    } else {
+                                        // Don't allow unchecking if it's the last language
+                                        if (enabledLanguages.size > 1) {
+                                            enabledLanguages - language
+                                        } else {
+                                            enabledLanguages
+                                        }
+                                    }
+                                    onEnabledLanguagesChanged(newLanguages)
+                                },
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(
+                                checked = language in enabledLanguages,
+                                onCheckedChange = null,
+                                enabled = language in enabledLanguages || enabledLanguages.size > 1
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = language,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
                         }
                     }
                 }
